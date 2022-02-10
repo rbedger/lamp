@@ -5,6 +5,7 @@
 #define NUM_LEDS 11
 #define ANALOG_THRESHOLD 1000
 #define MAX_BRIGHTNESS 255
+#define MIN_BRIGHTNESS_LOOPS 3
 
 CRGB leds[NUM_LEDS];
 
@@ -22,9 +23,9 @@ enum OnOff
   OFF,
 };
 
-int modePressLoopCount = 0;
-OnOff previousModeButtonValue = OnOff::ON;
-Mode currentMode = Mode::CarbonArc;
+uint8_t modePressLoopCount = 0;
+OnOff prevBtnState = OnOff::OFF;
+Mode curMode = Mode::CarbonArc;
 
 void setup()
 {
@@ -38,9 +39,51 @@ void setup()
 
 void loop()
 {
-  OnOff modeButtonValue = readMode();
+  readMode();
 
-  switch (currentMode)
+  displayMode();
+
+  delay(300);
+}
+
+void readMode()
+{
+  OnOff curBtnState = analogRead(MODE_PIN) < ANALOG_THRESHOLD
+                          ? OnOff::OFF
+                          : OnOff::ON;
+
+  if (curBtnState == OnOff::OFF)
+  {
+    // only change mode when the button is quick-pressed.
+    // i.e. transitioning to OFF from a brightness change should not change mode.
+    if (prevBtnState == OnOff::ON && modePressLoopCount <= MIN_BRIGHTNESS_LOOPS)
+    {
+      curMode = (Mode)((((int)curMode) + 1) % 4);
+
+      Serial.print("Mode switched to ");
+      Serial.println(curMode);
+    }
+
+    modePressLoopCount = 0;
+  }
+  else
+  {
+    // if the button has been held down long enough, start changing the brightness in increments
+    if (++modePressLoopCount > 3)
+    {
+      FastLED.setBrightness((FastLED.getBrightness() + 25) % MAX_BRIGHTNESS);
+
+      Serial.print("Changed brightness to: ");
+      Serial.println(FastLED.getBrightness());
+    }
+  }
+
+  prevBtnState = curBtnState;
+}
+
+void displayMode()
+{
+  switch (curMode)
   {
   case Mode::Tungsten40:
     FastLED.setTemperature(ColorTemperature::Tungsten40W);
@@ -60,41 +103,5 @@ void loop()
     break;
   }
 
-  previousModeButtonValue = modeButtonValue;
-
   FastLED.show();
-  delay(300);
-}
-
-OnOff readMode()
-{
-  const int requiredBrightnessLoops = 3;
-
-  OnOff modeButtonValue = analogRead(MODE_PIN) < ANALOG_THRESHOLD
-                              ? OnOff::OFF
-                              : OnOff::ON;
-
-  if (modeButtonValue == OnOff::OFF)
-  {
-    if (previousModeButtonValue == OnOff::ON && modePressLoopCount <= requiredBrightnessLoops)
-    {
-      currentMode = (Mode)((((int)currentMode) + 1) % 4);
-      Serial.print("Mode switched to ");
-      Serial.println(currentMode);
-    }
-
-    modePressLoopCount = 0;
-  }
-  else if (modeButtonValue == OnOff::ON)
-  {
-    // if the button has been held down long enough, start changing the brightness in increments
-    if (++modePressLoopCount > 3)
-    {
-      FastLED.setBrightness((FastLED.getBrightness() + 25) % MAX_BRIGHTNESS);
-      Serial.print("Changed brightness to: ");
-      Serial.println(FastLED.getBrightness());
-    }
-  }
-
-  return modeButtonValue;
 }
