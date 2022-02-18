@@ -109,6 +109,7 @@ enum OnOff
 
 uint8_t modePressLoopCount = 0;
 unsigned long lastModePressMillis = 0;
+unsigned long lastLoopMillis = 0;
 
 OnOff prevBtnState = OnOff::OFF;
 Mode curMode = Mode::xRainbow;
@@ -188,11 +189,22 @@ void loop()
 
     Serial.println(F("******************************"));
   }
-  readMode();
 
-  displayMode();
+  // if bluetooth didn't handle any incoming data, do the normal operations
+  if (prevBTLEState == OnOff::OFF || !handleBluetooth())
+  {
+    readMode();
+    displayMode();
+  }
 
-  handleBluetooth();
+  FastLED.show();
+
+  // bluetooth performs its own delay, but if it's constantly receiving data,
+  // as is the case of the accelerometer, insert an additional delay.
+  if (millis() - lastModePressMillis < BLE_READPACKET_TIMEOUT)
+  {
+    delay(max(BLE_READPACKET_TIMEOUT, millis() - lastModePressMillis));
+  }
 }
 
 void readMode()
@@ -264,8 +276,6 @@ void displayMode()
     }
     break;
   }
-
-  FastLED.show();
 }
 
 CRGB slowFadeColors[NUM_LEDS] = {
@@ -311,12 +321,12 @@ void displaySlowFade()
   delay(1);
 }
 
-void handleBluetooth()
+boolean handleBluetooth()
 {
   /* Wait for new data to arrive */
   uint8_t len = readPacket(&ble, BLE_READPACKET_TIMEOUT);
   if (len == 0)
-    return;
+    return false;
 
   /* Got a packet! */
   // printHex(packetbuffer, len);
@@ -342,5 +352,55 @@ void handleBluetooth()
     Serial.println(blue, HEX);
 
     solidColor = CRGB(red, green, blue);
+
+    return true;
   }
+
+  // Accelerometer
+  if (packetbuffer[1] == 'A')
+  {
+    float x, y, z;
+    x = parsefloat(packetbuffer + 2);
+    y = parsefloat(packetbuffer + 6);
+    z = parsefloat(packetbuffer + 10);
+    Serial.print("Accel\t");
+    Serial.print(x);
+    Serial.print('\t');
+    Serial.print(y);
+    Serial.print('\t');
+    Serial.print(z);
+    Serial.println();
+
+    int xLeds[4] = {0, 1, 2, 3};
+    int yLeds[4] = {4, 5, 6, 7};
+    int zLeds[3] = {8, 9, 10};
+
+    if (x > 5)
+    {
+      for (int i = 0; i < sizeof(xLeds); i++)
+      {
+        leds[xLeds[i]] = CRGB::Red;
+      }
+    }
+
+    if (y > 5)
+    {
+      for (int i = 0; i < sizeof(yLeds); i++)
+      {
+        leds[yLeds[i]] = CRGB::Red;
+      }
+    }
+
+    if (z > 5)
+    {
+      for (int i = 0; i < sizeof(zLeds); i++)
+      {
+        leds[zLeds[i]] = CRGB::Red;
+      }
+    }
+
+    return true;
+  }
+
+  return false;
 }
