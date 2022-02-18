@@ -98,7 +98,8 @@ enum Mode
   AllWhite = 0,
   xRainbow = 1,
   xSlowFade = 2,
-  xSolidColor = 3
+  xSolidColor = 3,
+  xAccelerometer = 4
 };
 
 enum OnOff
@@ -120,19 +121,10 @@ OnOff prevBTLEState = OnOff::OFF;
 
 void setup()
 {
-  while (!Serial)
-    ; // required for Flora & Micro
-  delay(500);
-
   Serial.begin(115200);
   Serial.println("Booting");
 
   FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-
-  FastLED.setBrightness(200);
-
-  Serial.println(F("Adafruit Bluefruit App Controller Example"));
-  Serial.println(F("-----------------------------------------"));
 
   /* Initialise the module */
   Serial.print(F("Initialising the Bluefruit LE module: "));
@@ -159,10 +151,6 @@ void setup()
   Serial.println("Requesting Bluefruit info:");
   /* Print Bluefruit information */
   ble.info();
-
-  Serial.println(F("Please use Adafruit Bluefruit LE app to connect in Controller mode"));
-  Serial.println(F("Then activate/use the sensors, color picker, game controller, etc!"));
-  Serial.println();
 
   ble.verbose(false); // debug info is a little annoying after this point!
 }
@@ -201,10 +189,12 @@ void loop()
 
   // bluetooth performs its own delay, but if it's constantly receiving data,
   // as is the case of the accelerometer, insert an additional delay.
-  if (millis() - lastModePressMillis < BLE_READPACKET_TIMEOUT)
+  if (millis() - lastLoopMillis < BLE_READPACKET_TIMEOUT)
   {
-    delay(max(BLE_READPACKET_TIMEOUT, millis() - lastModePressMillis));
+    delay(max(BLE_READPACKET_TIMEOUT, millis() - lastLoopMillis));
   }
+
+  lastLoopMillis = millis();
 }
 
 void readMode()
@@ -219,7 +209,7 @@ void readMode()
     // i.e. transitioning to OFF from a brightness change should not change mode.
     if (prevBtnState == OnOff::ON && modePressLoopCount <= MIN_BRIGHTNESS_LOOPS)
     {
-      curMode = (Mode)((((int)curMode) + 1) % 4);
+      curMode = (Mode)((((int)curMode) + 1) % 5);
 
       Serial.print("Mode switched to ");
       Serial.println(curMode);
@@ -321,15 +311,39 @@ void displaySlowFade()
   delay(1);
 }
 
+unsigned long lastAccelerometerUpdate = 0;
+uint8_t maxX = 0, maxY = 0, maxZ = 0;
+
+const int xLeds[4] = {0, 1, 2, 3};
+const int yLeds[4] = {4, 5, 6, 8};
+const int zLeds[3] = {7, 9, 10};
+
+unsigned long getAccelerometerColor(uint8_t value)
+{
+  if (value < 5)
+  {
+    return CRGB::Red;
+  }
+
+  if (value < 10)
+  {
+    return CRGB::Yellow;
+  }
+
+  if (value < 15)
+  {
+    return CRGB::Orange;
+  }
+
+  return CRGB::White;
+}
+
 boolean handleBluetooth()
 {
   /* Wait for new data to arrive */
   uint8_t len = readPacket(&ble, BLE_READPACKET_TIMEOUT);
   if (len == 0)
     return false;
-
-  /* Got a packet! */
-  // printHex(packetbuffer, len);
 
   // Color
   if (packetbuffer[1] == 'C')
@@ -359,6 +373,31 @@ boolean handleBluetooth()
   // Accelerometer
   if (packetbuffer[1] == 'A')
   {
+    curMode = Mode::xAccelerometer;
+
+    const unsigned long now = millis();
+    if (now - lastModePressMillis > 500)
+    {
+      for (int i = 0; i < 4; i++)
+      {
+        leds[xLeds[i]] = getAccelerometerColor(maxX);
+      }
+
+      for (int i = 0; i < 4; i++)
+      {
+        leds[yLeds[i]] = getAccelerometerColor(maxY);
+      }
+
+      for (int i = 0; i < 3; i++)
+      {
+        leds[zLeds[i]] = getAccelerometerColor(maxZ);
+      }
+
+      maxX = 0;
+      maxY = 0;
+      maxZ = 0;
+    }
+
     float x, y, z;
     x = parsefloat(packetbuffer + 2);
     y = parsefloat(packetbuffer + 6);
@@ -371,35 +410,21 @@ boolean handleBluetooth()
     Serial.print(z);
     Serial.println();
 
-    int xLeds[4] = {0, 1, 2, 3};
-    int yLeds[4] = {4, 5, 6, 7};
-    int zLeds[3] = {8, 9, 10};
-
-    if (x > 5)
-    {
-      for (int i = 0; i < sizeof(xLeds); i++)
-      {
-        leds[xLeds[i]] = CRGB::Red;
-      }
-    }
-
-    if (y > 5)
-    {
-      for (int i = 0; i < sizeof(yLeds); i++)
-      {
-        leds[yLeds[i]] = CRGB::Red;
-      }
-    }
-
-    if (z > 5)
-    {
-      for (int i = 0; i < sizeof(zLeds); i++)
-      {
-        leds[zLeds[i]] = CRGB::Red;
-      }
-    }
+    maxX = max(maxX, abs(x));
+    maxY = max(maxY, abs(y));
+    maxZ = max(maxZ, abs(z));
 
     return true;
+  }
+
+  if (packetbuffer[1] == 'Z')
+  {
+    const uint8_t newMode = packetbuffer[2] - 48;
+    Serial.print("BLE Mode Switch: ");
+    Serial.println(newMode);
+    curMode = (Mode)newMode;
+
+    ble.println("Mode switch acknowledged!");
   }
 
   return false;

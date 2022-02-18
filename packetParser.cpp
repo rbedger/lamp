@@ -16,6 +16,7 @@
 #define PACKET_BUTTON_LEN (5)
 #define PACKET_COLOR_LEN (6)
 #define PACKET_LOCATION_LEN (15)
+#define PACKET_MODE_LEN (4)
 
 //    READ_BUFSIZE            Size of the read buffer for incoming packets
 #define READ_BUFSIZE (20)
@@ -96,6 +97,8 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
       break;
     if ((packetbuffer[1] == 'L') && (replyidx == PACKET_LOCATION_LEN))
       break;
+    if ((packetbuffer[1] == 'Z') && (replyidx == PACKET_MODE_LEN))
+      break;
 
     while (ble->available())
     {
@@ -121,22 +124,25 @@ uint8_t readPacket(Adafruit_BLE *ble, uint16_t timeout)
   if (packetbuffer[0] != '!') // doesn't start with '!' packet beginning
     return 0;
 
-  // check checksum!
-  uint8_t xsum = 0;
-  uint8_t checksum = packetbuffer[replyidx - 1];
-
-  for (uint8_t i = 0; i < replyidx - 1; i++)
+  if (packetbuffer[1] != 'Z')
   {
-    xsum += packetbuffer[i];
-  }
-  xsum = ~xsum;
+    // check checksum!
+    uint8_t xsum = 0;
+    uint8_t checksum = packetbuffer[replyidx - 1];
 
-  // Throw an error message if the checksum's don't match
-  if (xsum != checksum)
-  {
-    Serial.print("Checksum mismatch in packet : ");
-    printHex(packetbuffer, replyidx + 1);
-    return 0;
+    for (uint8_t i = 0; i < replyidx - 1; i++)
+    {
+      xsum += packetbuffer[i];
+    }
+    xsum = ~xsum;
+
+    // Throw an error message if the checksum's don't match
+    if (xsum != checksum)
+    {
+      Serial.print("Checksum mismatch in packet : ");
+      printHex(packetbuffer, replyidx + 1);
+      return 0;
+    }
   }
 
   // checksum passed!
