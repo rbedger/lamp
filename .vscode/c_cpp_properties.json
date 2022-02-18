@@ -18,6 +18,9 @@
             "includePath": [
                 "C:\\Users\\rbedg\\AppData\\Local\\arduino15\\packages\\arduino\\hardware\\avr\\1.8.4\\cores\\arduino",
                 "C:\\Users\\rbedg\\AppData\\Local\\arduino15\\packages\\adafruit\\hardware\\avr\\1.4.15\\variants\\feather32u4",
+                "C:\\Users\\rbedg\\AppData\\Local\\arduino15\\packages\\arduino\\hardware\\avr\\1.8.4\\libraries\\SPI\\src",
+                "C:\\Users\\rbedg\\Documents\\Arduino\\libraries\\Adafruit_BluefruitLE_nRF51",
+                "C:\\Users\\rbedg\\AppData\\Local\\arduino15\\packages\\arduino\\hardware\\avr\\1.8.4\\libraries\\SoftwareSerial\\src",
                 "C:\\Users\\rbedg\\Documents\\Arduino\\libraries\\FastLED\\src",
                 "c:\\users\\rbedg\\appdata\\local\\arduino15\\packages\\arduino\\tools\\avr-gcc\\7.3.0-atmel3.6.1-arduino7\\lib\\gcc\\avr\\7.3.0\\include",
                 "c:\\users\\rbedg\\appdata\\local\\arduino15\\packages\\arduino\\tools\\avr-gcc\\7.3.0-atmel3.6.1-arduino7\\lib\\gcc\\avr\\7.3.0\\include-fixed",

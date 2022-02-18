@@ -1,6 +1,6 @@
 {
     "board": "adafruit:avr:feather32u4",
-    "port": "COM8",
+    "port": "COM10",
     "sketch": "lamp.ino",
     "output": "../LampOutput"
 }
